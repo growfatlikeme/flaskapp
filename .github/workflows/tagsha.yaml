@@ -1,12 +1,26 @@
+name: Build and Push to ECR
+
+on:
+  push:
+    branches:
+      - main
+
 env:
   AWS_REGION: ap-southeast-1
 
 jobs:
   deploy:
+    name: Build & Push Docker image to ECR
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Set up Python (optional if building requirements.txt)
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -20,10 +34,12 @@ jobs:
           aws ecr get-login-password --region $AWS_REGION | \
           docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
 
-      - name: Build and tag image
+      - name: Build Docker image
         run: |
-          docker build -t ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO }}:${{ github.sha }} .
+          docker build -t ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO }}:latest \
+                       -t ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO }}:${{ github.sha }} .
 
-      - name: Push image to ECR
+      - name: Push Docker image to ECR
         run: |
+          docker push ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO }}:latest
           docker push ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO }}:${{ github.sha }}
