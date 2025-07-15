@@ -1,26 +1,29 @@
-name: Build and Push Docker Image
-
-on:
-  push:
-    branches:
-      - main
+env:
+  AWS_REGION: ap-southeast-1
 
 jobs:
-  build-and-push:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Login to Amazon ECR
         run: |
-          aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
+          aws ecr get-login-password --region $AWS_REGION | \
           docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
-        env:
-          AWS_REGION: ap-southeast-1
 
-      - name: Build Docker image
-        run: docker build -t ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO }}:${{ github.sha }} .
+      - name: Build and tag image
+        run: |
+          docker build -t ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO }}:${{ github.sha }} .
 
       - name: Push image to ECR
-        run: docker push ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO }}:${{ github.sha }}
+        run: |
+          docker push ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO }}:${{ github.sha }}
