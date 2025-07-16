@@ -63,37 +63,36 @@ jobs:
           echo "Waiting for ECS task to be running..."
           sleep 30
           
-          # Get the ECS cluster and service names from Terraform outputs
-          cd ./terraform
-          CLUSTER_NAME=$(terraform output -json ecs_cluster_name | jq -r '.')
-          SERVICE_NAME=$(terraform output -json ecs_service_name | jq -r '.')
-          EIP_ID=$(terraform output -json task_eip_allocation_id | jq -r '.')
+          # Use hardcoded values instead of trying to parse Terraform output
+          CLUSTER_NAME="growfat-flask-ecs"
+          SERVICE_NAME="growfat-service"
           
-          echo "Cluster: $CLUSTER_NAME"
-          echo "Service: $SERVICE_NAME"
+          # Get the EIP allocation ID directly
+          cd ./terraform
+          EIP_ID=$(terraform output | grep task_eip_allocation_id | awk '{print $3}' | tr -d '"')
           echo "EIP ID: $EIP_ID"
           
           # Get the task ARN
           echo "Getting task ARN..."
-          TASK_ARN=$(aws ecs list-tasks --cluster "$CLUSTER_NAME" --service-name "$SERVICE_NAME" --query 'taskArns[0]' --output text)
+          TASK_ARN=$(aws ecs list-tasks --cluster $CLUSTER_NAME --service-name $SERVICE_NAME --query 'taskArns[0]' --output text)
           
           if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" == "None" ]; then
             echo "No running tasks found. Waiting longer..."
             sleep 30
-            TASK_ARN=$(aws ecs list-tasks --cluster "$CLUSTER_NAME" --service-name "$SERVICE_NAME" --query 'taskArns[0]' --output text)
+            TASK_ARN=$(aws ecs list-tasks --cluster $CLUSTER_NAME --service-name $SERVICE_NAME --query 'taskArns[0]' --output text)
           fi
           
           echo "Task ARN: $TASK_ARN"
           
           # Get the ENI ID
           echo "Getting network interface ID..."
-          ENI_ID=$(aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN" --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
+          ENI_ID=$(aws ecs describe-tasks --cluster $CLUSTER_NAME --tasks $TASK_ARN --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
           echo "Network Interface ID: $ENI_ID"
           
           # Associate the EIP with the ENI
           echo "Associating EIP with network interface..."
-          aws ec2 associate-address --allocation-id "$EIP_ID" --network-interface-id "$ENI_ID"
+          aws ec2 associate-address --allocation-id $EIP_ID --network-interface-id $ENI_ID
           
           # Output the URL
-          PUBLIC_IP=$(aws ec2 describe-addresses --allocation-ids "$EIP_ID" --query 'Addresses[0].PublicIp' --output text)
+          PUBLIC_IP=$(aws ec2 describe-addresses --allocation-ids $EIP_ID --query 'Addresses[0].PublicIp' --output text)
           echo "Flask app is available at: http://$PUBLIC_IP:8080"
