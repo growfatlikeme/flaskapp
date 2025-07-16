@@ -108,19 +108,10 @@ output "flask_app_url" {
   value       = "http://${aws_eip.task_eip.public_ip}:8080"
 }
 
-# Output instructions for associating the EIP with the task
-output "eip_association_instructions" {
-  description = "Instructions to manually associate the EIP with the task"
-  value       = <<-EOT
-    To associate the Elastic IP with your ECS task:
-    
-    1. Wait for the ECS task to be running
-    2. Find the ENI ID of the task:
-       aws ecs list-tasks --cluster ${aws_ecs_cluster.main.name} --service-name ${aws_ecs_service.growfat_service.name} --query 'taskArns[0]' --output text | xargs aws ecs describe-tasks --cluster ${aws_ecs_cluster.main.name} --tasks | jq -r '.tasks[0].attachments[0].details[] | select(.name=="networkInterfaceId") | .value'
-    
-    3. Associate the EIP with the ENI:
-       aws ec2 associate-address --allocation-id ${aws_eip.task_eip.id} --network-interface-id <ENI_ID>
-  EOT
+# Output the EIP allocation ID for the GitHub Actions workflow
+output "task_eip_allocation_id" {
+  description = "Allocation ID of the Elastic IP for the task"
+  value       = aws_eip.task_eip.id
 }
 
 # Output the ECS cluster name
