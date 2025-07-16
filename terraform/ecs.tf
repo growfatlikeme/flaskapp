@@ -36,6 +36,8 @@ resource "aws_ecs_task_definition" "growfat_task" {
   depends_on = [aws_vpc.my_vpc, aws_subnet.public_subnets]
 }
 
+
+
 resource "aws_ecs_service" "growfat_service" {
   name            = "growfat-service"
   cluster         = aws_ecs_cluster.main.id
@@ -92,16 +94,43 @@ resource "aws_security_group" "growfat_sg" {
   }
 }
 
-# Create a public IP for the service
-resource "aws_eip" "flask_app_ip" {
+# Create an Elastic IP for the task
+resource "aws_eip" "task_eip" {
   domain = "vpc"
   tags = {
-    Name = "${local.name_prefix}-flask-app-ip"
+    Name = "${local.name_prefix}-task-eip"
   }
 }
 
-# Output the URL with the public IP
+# Output the task's public IP as a URL
 output "flask_app_url" {
   description = "URL to access the Flask application"
-  value       = "http://${aws_eip.flask_app_ip.public_ip}:8080"
+  value       = "http://${aws_eip.task_eip.public_ip}:8080"
+}
+
+# Output instructions for associating the EIP with the task
+output "eip_association_instructions" {
+  description = "Instructions to manually associate the EIP with the task"
+  value       = <<-EOT
+    To associate the Elastic IP with your ECS task:
+    
+    1. Wait for the ECS task to be running
+    2. Find the ENI ID of the task:
+       aws ecs list-tasks --cluster ${aws_ecs_cluster.main.name} --service-name ${aws_ecs_service.growfat_service.name} --query 'taskArns[0]' --output text | xargs aws ecs describe-tasks --cluster ${aws_ecs_cluster.main.name} --tasks | jq -r '.tasks[0].attachments[0].details[] | select(.name=="networkInterfaceId") | .value'
+    
+    3. Associate the EIP with the ENI:
+       aws ec2 associate-address --allocation-id ${aws_eip.task_eip.id} --network-interface-id <ENI_ID>
+  EOT
+}
+
+# Output the ECS cluster name
+output "ecs_cluster_name" {
+  description = "Name of the ECS cluster"
+  value       = aws_ecs_cluster.main.name
+}
+
+# Output the ECS service name
+output "ecs_service_name" {
+  description = "Name of the ECS service"
+  value       = aws_ecs_service.growfat_service.name
 }
