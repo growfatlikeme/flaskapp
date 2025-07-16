@@ -91,3 +91,23 @@ resource "aws_security_group" "growfat_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
+# Output the public IP of the ECS task
+data "aws_network_interface" "ecs_eni" {
+  filter {
+    name   = "subnet-id"
+    values = values(aws_subnet.public_subnets)[*].id
+  }
+  
+  filter {
+    name   = "group-id"
+    values = [aws_security_group.growfat_sg.id]
+  }
+  
+  depends_on = [aws_ecs_service.growfat_service]
+}
+
+output "flask_app_url" {
+  description = "URL to access the Flask application"
+  value       = "http://${data.aws_network_interface.ecs_eni.association[0].public_ip}:8080"
+}
