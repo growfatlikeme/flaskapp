@@ -15,17 +15,7 @@ variable "environment" {
 # VPC
 ################################################################################
 
-variable "create_vpc" {
-  description = "Controls if VPC should be created (it affects almost all resources)"
-  type        = bool
-  default     = true
-}
 
-variable "aws_region" {
-  type        = string
-  description = "AWS region to deploy resources"
-  default     = "ap-southeast-1"
-}
 
 variable "myvpc_cidr" {
   type        = string
