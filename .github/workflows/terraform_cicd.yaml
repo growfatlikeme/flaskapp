@@ -64,9 +64,10 @@ jobs:
           sleep 30
           
           # Get the ECS cluster and service names from Terraform outputs
-          CLUSTER_NAME=$(terraform output ecs_cluster_name | tr -d '"')
-          SERVICE_NAME=$(terraform output ecs_service_name | tr -d '"')
-          EIP_ID=$(terraform output task_eip_allocation_id | tr -d '"')
+          cd ./terraform
+          CLUSTER_NAME=$(terraform output -json ecs_cluster_name | jq -r '.')
+          SERVICE_NAME=$(terraform output -json ecs_service_name | jq -r '.')
+          EIP_ID=$(terraform output -json task_eip_allocation_id | jq -r '.')
           
           echo "Cluster: $CLUSTER_NAME"
           echo "Service: $SERVICE_NAME"
@@ -96,4 +97,3 @@ jobs:
           # Output the URL
           PUBLIC_IP=$(aws ec2 describe-addresses --allocation-ids "$EIP_ID" --query 'Addresses[0].PublicIp' --output text)
           echo "Flask app is available at: http://$PUBLIC_IP:8080"
-        working-directory: ./terraform
