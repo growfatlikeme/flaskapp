@@ -98,12 +98,12 @@ data "aws_network_interface" "ecs_eni" {
     name   = "subnet-id"
     values = values(aws_subnet.public_subnets)[*].id
   }
-  
+
   filter {
     name   = "group-id"
     values = [aws_security_group.growfat_sg.id]
   }
-  
+
   depends_on = [aws_ecs_service.growfat_service]
 }
 
