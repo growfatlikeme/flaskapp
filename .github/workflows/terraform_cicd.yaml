@@ -69,7 +69,7 @@ jobs:
           
           # Get the EIP allocation ID directly
           cd ./terraform
-          EIP_ID=$(terraform output | grep task_eip_allocation_id | awk '{print $3}' | tr -d '"')
+          EIP_ID=$(terraform output task_eip_allocation_id | tr -d '"')
           echo "EIP ID: $EIP_ID"
           
           # Get the task ARN
