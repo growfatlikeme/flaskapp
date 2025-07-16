@@ -92,22 +92,16 @@ resource "aws_security_group" "growfat_sg" {
   }
 }
 
-# Output the public IP of the ECS task
-data "aws_network_interface" "ecs_eni" {
-  filter {
-    name   = "subnet-id"
-    values = values(aws_subnet.public_subnets)[*].id
+# Create a public IP for the service
+resource "aws_eip" "flask_app_ip" {
+  domain = "vpc"
+  tags = {
+    Name = "${local.name_prefix}-flask-app-ip"
   }
-
-  filter {
-    name   = "group-id"
-    values = [aws_security_group.growfat_sg.id]
-  }
-
-  depends_on = [aws_ecs_service.growfat_service]
 }
 
+# Output the URL with the public IP
 output "flask_app_url" {
   description = "URL to access the Flask application"
-  value       = "http://${data.aws_network_interface.ecs_eni.association[0].public_ip}:8080"
+  value       = "http://${aws_eip.flask_app_ip.public_ip}:8080"
 }
