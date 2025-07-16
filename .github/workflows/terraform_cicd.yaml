@@ -57,24 +57,16 @@ jobs:
         run: terraform apply -auto-approve
         working-directory: ./terraform
 
-      - name: Get EIP ID
-        id: get-eip
-        run: |
-          EIP_ID=$(terraform output -raw task_eip_allocation_id)
-          echo "EIP_ID=$EIP_ID" >> $GITHUB_OUTPUT
-        working-directory: ./terraform
-
       - name: Associate EIP with ECS Task
-        env:
-          EIP_ID: ${{ steps.get-eip.outputs.EIP_ID }}
         run: |
           # Wait for the ECS task to be running
           echo "Waiting for ECS task to be running..."
           sleep 30
           
-          # Use hardcoded values for cluster and service
+          # Use hardcoded values for cluster, service, and EIP ID
           CLUSTER_NAME="growfat-flask-ecs"
           SERVICE_NAME="growfat-service"
+          EIP_ID="eipalloc-0616ea13d6827a7f2"
           
           echo "EIP ID: $EIP_ID"
           
