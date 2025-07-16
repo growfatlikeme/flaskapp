@@ -1,10 +1,8 @@
 name: Terraform CI
 
 on:
-  workflow_run:
-    workflows: ["Build and Push to ECR"]
-    types:
-      - completed
+  push:
+    branches: ["main"]
 
 jobs:
   CI:
