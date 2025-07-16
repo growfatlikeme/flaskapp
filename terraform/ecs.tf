@@ -94,25 +94,6 @@ resource "aws_security_group" "growfat_sg" {
   }
 }
 
-# Create an Elastic IP for the task
-resource "aws_eip" "task_eip" {
-  domain = "vpc"
-  tags = {
-    Name = "${local.name_prefix}-task-eip"
-  }
-}
-
-# Output the task's public IP as a URL
-output "flask_app_url" {
-  description = "URL to access the Flask application"
-  value       = "http://${aws_eip.task_eip.public_ip}:8080"
-}
-
-# Output the EIP allocation ID for the GitHub Actions workflow
-output "task_eip_allocation_id" {
-  description = "Allocation ID of the Elastic IP for the task"
-  value       = aws_eip.task_eip.id
-}
 
 # Output the ECS cluster name
 output "ecs_cluster_name" {

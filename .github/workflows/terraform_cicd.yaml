@@ -79,17 +79,14 @@ jobs:
             TASK_ARN=$(aws ecs list-tasks --cluster $CLUSTER_NAME --service-name $SERVICE_NAME --query 'taskArns[0]' --output text)
           fi
           
-          echo "Task ARN: $TASK_ARN"
-          
           # Get the ENI ID
           echo "Getting network interface ID..."
           ENI_ID=$(aws ecs describe-tasks --cluster $CLUSTER_NAME --tasks $TASK_ARN --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
-          echo "Network Interface ID: $ENI_ID"
           
           # Get the public IP directly from the ENI
-          echo "Getting public IP from ENI..."
           PUBLIC_IP=$(aws ec2 describe-network-interfaces --network-interface-ids $ENI_ID --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
-          echo "Public IP: $PUBLIC_IP"
           
           # Output the URL
+          echo "\n\n=============================================="
           echo "Flask app is available at: http://$PUBLIC_IP:8080"
+          echo "==============================================\n\n"
