@@ -1,0 +1,98 @@
+name: Manual Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Select the target environment"
+        type: choice
+        required: false
+        options:
+          - dev
+
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-1
+          role-duration-seconds: 1200
+          role-session-name: GithubActionsSession
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform fmt
+        run: terraform fmt -check
+        working-directory: ./terraform
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ./terraform
+
+      - uses: terraform-linters/setup-tflint@v3
+        with:
+          tflint_version: latest
+
+      - name: Show version
+        run: tflint --version
+
+      - name: Init TFLint
+        run: tflint --init
+        working-directory: ./terraform
+
+      - name: Run TFLint
+        run: tflint -f compact
+        working-directory: ./terraform
+
+      - name: Terraform Plan
+        run: terraform plan
+        working-directory: ./terraform
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: ./terraform
+
+      - name: Get Task Public IP
+        run: |
+          # Wait for the ECS task to be running
+          echo "Waiting for ECS task to be running..."
+          sleep 30
+
+          # Use hardcoded values for cluster and service
+          CLUSTER_NAME="growfat-flask-ecs"
+          SERVICE_NAME="growfat-service"
+
+          # Get the task ARN
+          echo "Getting task ARN..."
+          TASK_ARN=$(aws ecs list-tasks --cluster $CLUSTER_NAME --service-name $SERVICE_NAME --query 'taskArns[0]' --output text)
+
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" == "None" ]; then
+            echo "No running tasks found. Waiting longer..."
+            sleep 30
+            TASK_ARN=$(aws ecs list-tasks --cluster $CLUSTER_NAME --service-name $SERVICE_NAME --query 'taskArns[0]' --output text)
+          fi
+
+          # Get the ENI ID
+          echo "Getting network interface ID..."
+          ENI_ID=$(aws ecs describe-tasks --cluster $CLUSTER_NAME --tasks $TASK_ARN --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
+
+          # Get the public IP directly from the ENI
+          PUBLIC_IP=$(aws ec2 describe-network-interfaces --network-interface-ids $ENI_ID --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
+
+          # Output the URL
+          echo "\n\n=============================================="
+          echo "Flask app is available at: http://$PUBLIC_IP:8080"
+          echo "==============================================\n\n"
