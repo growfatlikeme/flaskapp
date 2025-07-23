@@ -1,22 +1,20 @@
-# name: Build and Push to ECR
-#
-# on:
-#   push:
-#     branches:
-#       - main
-#
-# env:
-#   AWS_REGION: ap-southeast-1
-#
-# jobs:
-#   deploy:
-#     name: Build & Push Docker image to ECR
-#     runs-on: ubuntu-latest
-#
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v3
-#
+name: Build and Push to ECR
+
+on:
+  pull_request:
+    branches: ["main"]
+
+env:
+  AWS_REGION: ap-southeast-1
+
+jobs:
+  deploy:
+    name: Build & Push Docker image to ECR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 #       - name: Set up Python (optional if building requirements.txt)
 #         uses: actions/setup-python@v4
 #         with:
