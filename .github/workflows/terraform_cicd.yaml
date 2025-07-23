@@ -55,6 +55,16 @@ jobs:
         run: terraform plan
         working-directory: ./terraform
 
+      - name: Create ECR Repository
+        run: |
+          # Check if repository exists
+          if ! aws ecr describe-repositories --repository-names growfat-flask-private-repository &> /dev/null; then
+            echo "Creating ECR repository: growfat-flask-private-repository"
+            aws ecr create-repository --repository-name growfat-flask-private-repository --image-scanning-configuration scanOnPush=true
+          else
+            echo "ECR repository already exists: growfat-flask-private-repository"
+          fi
+
       - name: Terraform Apply
         run: terraform apply -auto-approve
         working-directory: ./terraform
