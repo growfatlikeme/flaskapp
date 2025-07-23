@@ -1,7 +1,7 @@
 name: Terraform CI
 
 on:
-  push:
+  pull_request:
     branches: ["main"]
 
 jobs:
@@ -64,28 +64,28 @@ jobs:
           # Wait for the ECS task to be running
           echo "Waiting for ECS task to be running..."
           sleep 30
-          
+
           # Use hardcoded values for cluster and service
           CLUSTER_NAME="growfat-flask-ecs"
           SERVICE_NAME="growfat-service"
-          
+
           # Get the task ARN
           echo "Getting task ARN..."
           TASK_ARN=$(aws ecs list-tasks --cluster $CLUSTER_NAME --service-name $SERVICE_NAME --query 'taskArns[0]' --output text)
-          
+
           if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" == "None" ]; then
             echo "No running tasks found. Waiting longer..."
             sleep 30
             TASK_ARN=$(aws ecs list-tasks --cluster $CLUSTER_NAME --service-name $SERVICE_NAME --query 'taskArns[0]' --output text)
           fi
-          
+
           # Get the ENI ID
           echo "Getting network interface ID..."
           ENI_ID=$(aws ecs describe-tasks --cluster $CLUSTER_NAME --tasks $TASK_ARN --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
-          
+
           # Get the public IP directly from the ENI
           PUBLIC_IP=$(aws ec2 describe-network-interfaces --network-interface-ids $ENI_ID --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
-          
+
           # Output the URL
           echo "\n\n=============================================="
           echo "Flask app is available at: http://$PUBLIC_IP:8080"
