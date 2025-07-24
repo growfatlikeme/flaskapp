@@ -17,7 +17,7 @@ def index():
     return jsonify({
         "message": "Hello from Growfat Flask!",
         "app_config": app_config,
-        "db_password": db_password
+        "db_password_set": bool(db_password)
     })
 
 if __name__ == "__main__":
