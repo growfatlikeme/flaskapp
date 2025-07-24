@@ -38,6 +38,16 @@ jobs:
         with:
           mask-password: true
 
+      - name: Create ECR Repository
+        run: |
+          # Check if repository exists
+          if ! aws ecr describe-repositories --repository-names growfat-flask-private-repository &> /dev/null; then
+            echo "Creating ECR repository: growfat-flask-private-repository"
+            aws ecr create-repository --repository-name growfat-flask-private-repository --image-scanning-configuration scanOnPush=true
+          else
+            echo "ECR repository already exists: growfat-flask-private-repository"
+          fi
+
       - name: Build and push Docker image to Amazon ECR
         id: build-image
         uses: docker/build-push-action@v6
@@ -49,16 +59,6 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPO }}:latest
           platforms: linux/amd64
           provenance: false
-
-      - name: Create ECR Repository
-        run: |
-          # Check if repository exists
-          if ! aws ecr describe-repositories --repository-names growfat-flask-private-repository &> /dev/null; then
-            echo "Creating ECR repository: growfat-flask-private-repository"
-            aws ecr create-repository --repository-name growfat-flask-private-repository --image-scanning-configuration scanOnPush=true
-          else
-            echo "ECR repository already exists: growfat-flask-private-repository"
-          fi
 
       - name: Create SSM Parameter and Secrets Manager Secret
         id: create-secrets
