@@ -4,16 +4,6 @@ on:
   push:
     branches: ["dev", "uat"]
     paths: ["app.py", "requirements.txt", "Dockerfile"]
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-        - dev
-        - uat
 
 jobs:
   deploy:

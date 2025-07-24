@@ -48,34 +48,12 @@ jobs:
             echo "ECR repository already exists: growfat-flask-private-repository"
           fi
 
-      - name: Handle Existing Resources
+      - name: Clean up existing CloudWatch log group
         run: |
-          # Check and import resources only if not already in state
-          
-          # Task role
-          if ! terraform state show aws_iam_role.ecs_task_role &> /dev/null && aws iam get-role --role-name growfat-ecs-xray-taskrole &> /dev/null; then
-            echo "Importing existing task role..."
-            terraform import aws_iam_role.ecs_task_role growfat-ecs-xray-taskrole
+          if aws logs describe-log-groups --log-group-name-prefix "/ecs/growfat-task" --query 'logGroups[0].logGroupName' --output text | grep -q "/ecs/growfat-task"; then
+            echo "Deleting existing CloudWatch log group..."
+            aws logs delete-log-group --log-group-name "/ecs/growfat-task"
           fi
-
-          # Execution role
-          if ! terraform state show aws_iam_role.ecs_execution_role &> /dev/null && aws iam get-role --role-name growfat-ecs-xray-taskexecutionrole &> /dev/null; then
-            echo "Importing existing execution role..."
-            terraform import aws_iam_role.ecs_execution_role growfat-ecs-xray-taskexecutionrole
-          fi
-          
-          # CloudWatch log group
-          if ! terraform state show aws_cloudwatch_log_group.ecs_log_group &> /dev/null && aws logs describe-log-groups --log-group-name-prefix "/ecs/growfat-task" --query 'logGroups[0].logGroupName' --output text | grep -q "/ecs/growfat-task"; then
-            echo "Importing existing log group..."
-            terraform import aws_cloudwatch_log_group.ecs_log_group "/ecs/growfat-task"
-          fi
-          
-          # ECS service
-          if ! terraform state show aws_ecs_service.growfat_service &> /dev/null && aws ecs describe-services --cluster growfat-flask-ecs --services growfat-service --query 'services[0].serviceName' --output text | grep -q "growfat-service"; then
-            echo "Importing existing ECS service..."
-            terraform import aws_ecs_service.growfat_service growfat-flask-ecs/growfat-service
-          fi
-        working-directory: ./terraform
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
