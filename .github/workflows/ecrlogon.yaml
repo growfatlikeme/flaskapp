@@ -89,22 +89,81 @@ jobs:
           echo "Secrets Manager Secret ARN: $SECRET_ARN"
           echo "SECRET_ARN=$SECRET_ARN" >> $GITHUB_OUTPUT
 
-      - name: Download task definition
+      - name: Create and register task definition
         run: |
-          aws ecs describe-task-definition --task-definition ${{ secrets.TASK_DEF }} --query taskDefinition > task-definition.json
-
-      - name: Fill in the new image ID in the Amazon ECS task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: ${{ secrets.CONTAINER_NAME }}
-          image: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPO }}:${{ github.sha }}
-
-      - name: Deploy Amazon ECS task definition
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ secrets.ECS_SERVICE }}
-          cluster: ${{ secrets.ECS_CLUSTER }}
-          wait-for-service-stability: true
+          cat > task-definition.json << EOF
+          {
+            "family": "growfat-task",
+            "networkMode": "awsvpc",
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "512",
+            "memory": "1024",
+            "executionRoleArn": "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/growfat-ecs-xray-taskexecutionrole",
+            "taskRoleArn": "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/growfat-ecs-xray-taskrole",
+            "containerDefinitions": [
+              {
+                "name": "growfat-flask-container",
+                "image": "${{ steps.login-ecr.outputs.registry }}/growfat-flask-private-repository:${{ github.sha }}",
+                "essential": true,
+                "portMappings": [
+                  {
+                    "containerPort": 8080,
+                    "protocol": "tcp"
+                  }
+                ],
+                "environment": [
+                  {
+                    "name": "SERVICE_NAME",
+                    "value": "growfat-flask-service"
+                  }
+                ],
+                "secrets": [
+                  {
+                    "name": "MY_APP_CONFIG",
+                    "valueFrom": "${{ steps.create-secrets.outputs.SSM_PARAM_ARN }}"
+                  },
+                  {
+                    "name": "MY_DB_PASSWORD",
+                    "valueFrom": "${{ steps.create-secrets.outputs.SECRET_ARN }}"
+                  }
+                ],
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/growfat-task",
+                    "awslogs-region": "ap-southeast-1",
+                    "awslogs-stream-prefix": "flask-app"
+                  }
+                }
+              },
+              {
+                "name": "xray-sidecar",
+                "image": "amazon/aws-xray-daemon:latest",
+                "essential": false,
+                "portMappings": [
+                  {
+                    "containerPort": 2000,
+                    "protocol": "udp"
+                  }
+                ],
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/growfat-task",
+                    "awslogs-region": "ap-southeast-1",
+                    "awslogs-stream-prefix": "xray-sidecar"
+                  }
+                }
+              }
+            ]
+          }
+          EOF
+          
+          # Register the task definition
+          aws ecs register-task-definition --cli-input-json file://task-definition.json
+          
+          # Update the service to use the new task definition
+          aws ecs update-service \
+            --cluster growfat-flask-ecs \
+            --service growfat-service \
+            --task-definition growfat-task
