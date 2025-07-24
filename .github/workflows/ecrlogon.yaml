@@ -1,7 +1,10 @@
 name: Deploy to Amazon ECS
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Terraform CI"]
+    types:
+      - completed
     branches:
       - dev
       - uat
@@ -11,6 +14,7 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -93,15 +97,15 @@ jobs:
         run: |
           # Get current task definition
           aws ecs describe-task-definition --task-definition growfat-task --query taskDefinition > current-task-def.json
-          
+
           # Update the image in the task definition
           jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/growfat-flask-private-repository:${{ github.sha }}" \
              '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' \
              current-task-def.json > updated-task-def.json
-          
+
           # Register new task definition
           aws ecs register-task-definition --cli-input-json file://updated-task-def.json
-          
+
           # Update service to use new task definition
           aws ecs update-service \
             --cluster growfat-flask-ecs \
