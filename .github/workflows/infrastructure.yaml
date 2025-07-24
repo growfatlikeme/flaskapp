@@ -50,27 +50,30 @@ jobs:
 
       - name: Handle Existing Resources
         run: |
-          # Import IAM roles
-          if aws iam get-role --role-name growfat-ecs-xray-taskrole &> /dev/null; then
+          # Check and import resources only if not already in state
+          
+          # Task role
+          if ! terraform state show aws_iam_role.ecs_task_role &> /dev/null && aws iam get-role --role-name growfat-ecs-xray-taskrole &> /dev/null; then
             echo "Importing existing task role..."
-            terraform import aws_iam_role.ecs_task_role growfat-ecs-xray-taskrole || true
+            terraform import aws_iam_role.ecs_task_role growfat-ecs-xray-taskrole
           fi
 
-          if aws iam get-role --role-name growfat-ecs-xray-taskexecutionrole &> /dev/null; then
+          # Execution role
+          if ! terraform state show aws_iam_role.ecs_execution_role &> /dev/null && aws iam get-role --role-name growfat-ecs-xray-taskexecutionrole &> /dev/null; then
             echo "Importing existing execution role..."
-            terraform import aws_iam_role.ecs_execution_role growfat-ecs-xray-taskexecutionrole || true
+            terraform import aws_iam_role.ecs_execution_role growfat-ecs-xray-taskexecutionrole
           fi
           
-          # Import CloudWatch log group
-          if aws logs describe-log-groups --log-group-name-prefix "/ecs/growfat-task" --query 'logGroups[0].logGroupName' --output text | grep -q "/ecs/growfat-task"; then
+          # CloudWatch log group
+          if ! terraform state show aws_cloudwatch_log_group.ecs_log_group &> /dev/null && aws logs describe-log-groups --log-group-name-prefix "/ecs/growfat-task" --query 'logGroups[0].logGroupName' --output text | grep -q "/ecs/growfat-task"; then
             echo "Importing existing log group..."
-            terraform import aws_cloudwatch_log_group.ecs_log_group "/ecs/growfat-task" || true
+            terraform import aws_cloudwatch_log_group.ecs_log_group "/ecs/growfat-task"
           fi
           
-          # Import ECS service
-          if aws ecs describe-services --cluster growfat-flask-ecs --services growfat-service --query 'services[0].serviceName' --output text | grep -q "growfat-service"; then
+          # ECS service
+          if ! terraform state show aws_ecs_service.growfat_service &> /dev/null && aws ecs describe-services --cluster growfat-flask-ecs --services growfat-service --query 'services[0].serviceName' --output text | grep -q "growfat-service"; then
             echo "Importing existing ECS service..."
-            terraform import aws_ecs_service.growfat_service growfat-flask-ecs/growfat-service || true
+            terraform import aws_ecs_service.growfat_service growfat-flask-ecs/growfat-service
           fi
         working-directory: ./terraform
 
