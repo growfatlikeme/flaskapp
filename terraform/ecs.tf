@@ -43,7 +43,7 @@ resource "aws_ecs_task_definition" "growfat_task" {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = "/ecs/growfat-task"
-          "awslogs-region"        = "${data.aws_region.current.id}"
+          "awslogs-region"        = data.aws_region.current.id
           "awslogs-stream-prefix" = "flask-app"
         }
       }
@@ -62,7 +62,7 @@ resource "aws_ecs_task_definition" "growfat_task" {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = "/ecs/growfat-task"
-          "awslogs-region"        = "${data.aws_region.current.id}"
+          "awslogs-region"        = data.aws_region.current.id
           "awslogs-stream-prefix" = "xray-sidecar"
         }
       }
