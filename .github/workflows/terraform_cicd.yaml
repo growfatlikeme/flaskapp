@@ -1,8 +1,10 @@
 name: Terraform CI
 
 on:
-  pull_request:
-    branches: ["main"]
+  push:
+    branches:
+      - dev
+      - uat
 
 jobs:
   CI:
@@ -64,6 +66,20 @@ jobs:
           else
             echo "ECR repository already exists: growfat-flask-private-repository"
           fi
+
+      - name: Handle Existing IAM Roles
+        run: |
+          # Import existing roles into Terraform state if they exist
+          if aws iam get-role --role-name growfat-ecs-xray-taskrole &> /dev/null; then
+            echo "Importing existing task role..."
+            terraform import aws_iam_role.ecs_task_role growfat-ecs-xray-taskrole || true
+          fi
+          
+          if aws iam get-role --role-name growfat-ecs-xray-taskexecutionrole &> /dev/null; then
+            echo "Importing existing execution role..."
+            terraform import aws_iam_role.ecs_execution_role growfat-ecs-xray-taskexecutionrole || true
+          fi
+        working-directory: ./terraform
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
