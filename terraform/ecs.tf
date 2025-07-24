@@ -39,6 +39,16 @@ resource "aws_ecs_task_definition" "growfat_task" {
           value = "growfat-flask-service"
         }
       ]
+      secrets = [
+        {
+          name      = "MY_APP_CONFIG"
+          valueFrom = "arn:aws:ssm:ap-southeast-1:${data.aws_caller_identity.current.account_id}:parameter/growfat/config"
+        },
+        {
+          name      = "MY_DB_PASSWORD"
+          valueFrom = "arn:aws:secretsmanager:ap-southeast-1:${data.aws_caller_identity.current.account_id}:secret:growfat/db_password"
+        }
+      ]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
