@@ -1,7 +1,7 @@
 name: Infrastructure (Terraform)
 
 on:
-  push:
+  pull_request:
     branches: ["main"]
     paths: ["terraform/**"]
   workflow_dispatch:
@@ -54,7 +54,7 @@ jobs:
             echo "Importing existing task role..."
             terraform import aws_iam_role.ecs_task_role growfat-ecs-xray-taskrole || true
           fi
-          
+
           if aws iam get-role --role-name growfat-ecs-xray-taskexecutionrole &> /dev/null; then
             echo "Importing existing execution role..."
             terraform import aws_iam_role.ecs_execution_role growfat-ecs-xray-taskexecutionrole || true
