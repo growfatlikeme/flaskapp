@@ -50,6 +50,16 @@ jobs:
           platforms: linux/amd64
           provenance: false
 
+      - name: Create ECR Repository
+        run: |
+          # Check if repository exists
+          if ! aws ecr describe-repositories --repository-names growfat-flask-private-repository &> /dev/null; then
+            echo "Creating ECR repository: growfat-flask-private-repository"
+            aws ecr create-repository --repository-name growfat-flask-private-repository --image-scanning-configuration scanOnPush=true
+          else
+            echo "ECR repository already exists: growfat-flask-private-repository"
+          fi
+
       - name: Create SSM Parameter and Secrets Manager Secret
         id: create-secrets
         run: |
@@ -60,11 +70,11 @@ jobs:
             --type "String" \
             --value "${{ secrets.MY_APP_CONFIG }}" \
             --overwrite
-          
+
           SSM_PARAM_ARN="arn:aws:ssm:ap-southeast-1:$(aws sts get-caller-identity --query Account --output text):parameter/growfat/config"
           echo "SSM Parameter ARN: $SSM_PARAM_ARN"
           echo "SSM_PARAM_ARN=$SSM_PARAM_ARN" >> $GITHUB_OUTPUT
-          
+
           # Create Secrets Manager Secret
           echo "Creating Secrets Manager secret..."
           SECRET_ARN=$(aws secretsmanager create-secret \
@@ -75,7 +85,7 @@ jobs:
             --secret-id "growfat/db_password" \
             --secret-string "${{ secrets.MY_DB_PASSWORD }}" \
             --query 'ARN' --output text)
-          
+
           echo "Secrets Manager Secret ARN: $SECRET_ARN"
           echo "SECRET_ARN=$SECRET_ARN" >> $GITHUB_OUTPUT
 
