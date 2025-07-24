@@ -50,6 +50,35 @@ jobs:
           platforms: linux/amd64
           provenance: false
 
+      - name: Create SSM Parameter and Secrets Manager Secret
+        id: create-secrets
+        run: |
+          # Create SSM Parameter
+          echo "Creating SSM parameter..."
+          aws ssm put-parameter \
+            --name "/growfat/config" \
+            --type "String" \
+            --value "${{ secrets.MY_APP_CONFIG }}" \
+            --overwrite
+          
+          SSM_PARAM_ARN="arn:aws:ssm:ap-southeast-1:$(aws sts get-caller-identity --query Account --output text):parameter/growfat/config"
+          echo "SSM Parameter ARN: $SSM_PARAM_ARN"
+          echo "SSM_PARAM_ARN=$SSM_PARAM_ARN" >> $GITHUB_OUTPUT
+          
+          # Create Secrets Manager Secret
+          echo "Creating Secrets Manager secret..."
+          SECRET_ARN=$(aws secretsmanager create-secret \
+            --name "growfat/db_password" \
+            --secret-string "${{ secrets.MY_DB_PASSWORD }}" \
+            --query 'ARN' --output text 2>/dev/null || \
+            aws secretsmanager update-secret \
+            --secret-id "growfat/db_password" \
+            --secret-string "${{ secrets.MY_DB_PASSWORD }}" \
+            --query 'ARN' --output text)
+          
+          echo "Secrets Manager Secret ARN: $SECRET_ARN"
+          echo "SECRET_ARN=$SECRET_ARN" >> $GITHUB_OUTPUT
+
       - name: Download task definition
         run: |
           aws ecs describe-task-definition --task-definition ${{ secrets.TASK_DEF }} --query taskDefinition > task-definition.json
