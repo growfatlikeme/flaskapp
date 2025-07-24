@@ -8,13 +8,23 @@ on:
     branches:
       - dev
       - uat
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - uat
 
 jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name }}
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
