@@ -13,7 +13,77 @@ resource "aws_cloudwatch_log_group" "ecs_log_group" {
   retention_in_days = 7
 }
 
-# Task definition and service are managed by GitHub workflow
+resource "aws_ecs_task_definition" "growfat_task" {
+  family                   = "growfat-task"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "growfat-flask-container"
+      image     = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.id}.amazonaws.com/growfat-flask-private-repository:latest"
+      essential = true
+      portMappings = [
+        {
+          containerPort = 8080
+          protocol      = "tcp"
+        }
+      ]
+      environment = [
+        {
+          name  = "SERVICE_NAME"
+          value = "growfat-flask-service"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/growfat-task"
+          "awslogs-region"        = "${data.aws_region.current.id}"
+          "awslogs-stream-prefix" = "flask-app"
+        }
+      }
+    },
+    {
+      name      = "xray-sidecar"
+      image     = "amazon/aws-xray-daemon:latest"
+      essential = false
+      portMappings = [
+        {
+          containerPort = 2000
+          protocol      = "udp"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/growfat-task"
+          "awslogs-region"        = "${data.aws_region.current.id}"
+          "awslogs-stream-prefix" = "xray-sidecar"
+        }
+      }
+    }
+  ])
+  depends_on = [aws_vpc.my_vpc, aws_subnet.public_subnets]
+}
+
+resource "aws_ecs_service" "growfat_service" {
+  name            = "growfat-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.growfat_task.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = values(aws_subnet.public_subnets)[*].id
+    security_groups  = [aws_security_group.growfat_sg.id]
+    assign_public_ip = true
+  }
+}
 
 # ECS Task Role for X-Ray
 resource "aws_iam_role" "ecs_task_role" {
@@ -96,4 +166,10 @@ resource "aws_security_group" "growfat_sg" {
 output "ecs_cluster_name" {
   description = "Name of the ECS cluster"
   value       = aws_ecs_cluster.main.name
+}
+
+# Output the ECS service name
+output "ecs_service_name" {
+  description = "Name of the ECS service"
+  value       = aws_ecs_service.growfat_service.name
 }

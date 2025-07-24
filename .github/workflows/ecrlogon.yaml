@@ -89,80 +89,20 @@ jobs:
           echo "Secrets Manager Secret ARN: $SECRET_ARN"
           echo "SECRET_ARN=$SECRET_ARN" >> $GITHUB_OUTPUT
 
-      - name: Create and register task definition
+      - name: Update task definition with new image
         run: |
-          cat > task-definition.json << EOF
-          {
-            "family": "growfat-task",
-            "networkMode": "awsvpc",
-            "requiresCompatibilities": ["FARGATE"],
-            "cpu": "512",
-            "memory": "1024",
-            "executionRoleArn": "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/growfat-ecs-xray-taskexecutionrole",
-            "taskRoleArn": "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/growfat-ecs-xray-taskrole",
-            "containerDefinitions": [
-              {
-                "name": "growfat-flask-container",
-                "image": "${{ steps.login-ecr.outputs.registry }}/growfat-flask-private-repository:${{ github.sha }}",
-                "essential": true,
-                "portMappings": [
-                  {
-                    "containerPort": 8080,
-                    "protocol": "tcp"
-                  }
-                ],
-                "environment": [
-                  {
-                    "name": "SERVICE_NAME",
-                    "value": "growfat-flask-service"
-                  }
-                ],
-                "secrets": [
-                  {
-                    "name": "MY_APP_CONFIG",
-                    "valueFrom": "${{ steps.create-secrets.outputs.SSM_PARAM_ARN }}"
-                  },
-                  {
-                    "name": "MY_DB_PASSWORD",
-                    "valueFrom": "${{ steps.create-secrets.outputs.SECRET_ARN }}"
-                  }
-                ],
-                "logConfiguration": {
-                  "logDriver": "awslogs",
-                  "options": {
-                    "awslogs-group": "/ecs/growfat-task",
-                    "awslogs-region": "ap-southeast-1",
-                    "awslogs-stream-prefix": "flask-app"
-                  }
-                }
-              },
-              {
-                "name": "xray-sidecar",
-                "image": "amazon/aws-xray-daemon:latest",
-                "essential": false,
-                "portMappings": [
-                  {
-                    "containerPort": 2000,
-                    "protocol": "udp"
-                  }
-                ],
-                "logConfiguration": {
-                  "logDriver": "awslogs",
-                  "options": {
-                    "awslogs-group": "/ecs/growfat-task",
-                    "awslogs-region": "ap-southeast-1",
-                    "awslogs-stream-prefix": "xray-sidecar"
-                  }
-                }
-              }
-            ]
-          }
-          EOF
+          # Get current task definition
+          aws ecs describe-task-definition --task-definition growfat-task --query taskDefinition > current-task-def.json
           
-          # Register the task definition
-          aws ecs register-task-definition --cli-input-json file://task-definition.json
+          # Update the image in the task definition
+          jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/growfat-flask-private-repository:${{ github.sha }}" \
+             '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' \
+             current-task-def.json > updated-task-def.json
           
-          # Update the service to use the new task definition
+          # Register new task definition
+          aws ecs register-task-definition --cli-input-json file://updated-task-def.json
+          
+          # Update service to use new task definition
           aws ecs update-service \
             --cluster growfat-flask-ecs \
             --service growfat-service \
