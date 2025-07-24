@@ -10,14 +10,14 @@ service_name = os.environ.get('SERVICE_NAME')
 app = Flask(__name__)
 
 xray_recorder.configure(service=service_name)
-XRayMiddleware(app, xray_recorder)
+XRayMiddleware(app, xray_recorder) 
 
 @app.route("/")
 def index():
     return jsonify({
         "message": "Hello from Growfat Flask!",
         "app_config": app_config,
-        "db_password": db_password 
+        "db_password": db_password
     })
 
 if __name__ == "__main__":
