@@ -1,13 +1,9 @@
-name: Deploy to Amazon ECS
+name: Deploy Application
 
 on:
-  workflow_run:
-    workflows: ["Terraform CI"]
-    types:
-      - completed
-    branches:
-      - dev
-      - uat
+  push:
+    branches: ["dev", "uat"]
+    paths: ["app.py", "requirements.txt", "Dockerfile"]
   workflow_dispatch:
     inputs:
       environment:
@@ -21,23 +17,11 @@ on:
 
 jobs:
   deploy:
-    name: Deploy
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name }}
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    environment: ${{ github.ref_name || inputs.environment }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Deploy to environment
-        run: |
-          echo "Deploying to ${{ vars.ENV }} environment..."
-          echo "API_TOKEN is ${{ secrets.API_TOKEN }}"
-
-      - name: Set up Python (optional if building requirements.txt)
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.x"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -52,25 +36,14 @@ jobs:
         with:
           mask-password: true
 
-      - name: Create ECR Repository
-        run: |
-          # Check if repository exists
-          if ! aws ecr describe-repositories --repository-names growfat-flask-private-repository &> /dev/null; then
-            echo "Creating ECR repository: growfat-flask-private-repository"
-            aws ecr create-repository --repository-name growfat-flask-private-repository --image-scanning-configuration scanOnPush=true
-          else
-            echo "ECR repository already exists: growfat-flask-private-repository"
-          fi
-
-      - name: Build and push Docker image to Amazon ECR
-        id: build-image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPO }}:${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPO }}:latest
+            ${{ steps.login-ecr.outputs.registry }}/growfat-flask-private-repository:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/growfat-flask-private-repository:latest
           platforms: linux/amd64
           provenance: false
 
@@ -78,7 +51,6 @@ jobs:
         id: create-secrets
         run: |
           # Create SSM Parameter
-          echo "Creating SSM parameter..."
           aws ssm put-parameter \
             --name "/growfat/config" \
             --type "String" \
@@ -86,11 +58,9 @@ jobs:
             --overwrite
 
           SSM_PARAM_ARN="arn:aws:ssm:ap-southeast-1:$(aws sts get-caller-identity --query Account --output text):parameter/growfat/config"
-          echo "SSM Parameter ARN: $SSM_PARAM_ARN"
           echo "SSM_PARAM_ARN=$SSM_PARAM_ARN" >> $GITHUB_OUTPUT
 
           # Create Secrets Manager Secret
-          echo "Creating Secrets Manager secret..."
           SECRET_ARN=$(aws secretsmanager create-secret \
             --name "growfat/db_password" \
             --secret-string "${{ secrets.MY_DB_PASSWORD }}" \
@@ -100,24 +70,33 @@ jobs:
             --secret-string "${{ secrets.MY_DB_PASSWORD }}" \
             --query 'ARN' --output text)
 
-          echo "Secrets Manager Secret ARN: $SECRET_ARN"
           echo "SECRET_ARN=$SECRET_ARN" >> $GITHUB_OUTPUT
 
-      - name: Update task definition with new image
+      - name: Update ECS Task Definition
         run: |
           # Get current task definition
           aws ecs describe-task-definition --task-definition growfat-task --query taskDefinition > current-task-def.json
 
-          # Update the image in the task definition
+          # Update image and add secrets
           jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/growfat-flask-private-repository:${{ github.sha }}" \
-             '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' \
-             current-task-def.json > updated-task-def.json
+             --arg SSM_ARN "${{ steps.create-secrets.outputs.SSM_PARAM_ARN }}" \
+             --arg SECRET_ARN "${{ steps.create-secrets.outputs.SECRET_ARN }}" \
+             '
+             .containerDefinitions[0].image = $IMAGE |
+             .containerDefinitions[0].secrets = [
+               {"name": "MY_APP_CONFIG", "valueFrom": $SSM_ARN},
+               {"name": "MY_DB_PASSWORD", "valueFrom": $SECRET_ARN}
+             ] |
+             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)
+             ' current-task-def.json > updated-task-def.json
 
           # Register new task definition
           aws ecs register-task-definition --cli-input-json file://updated-task-def.json
 
-          # Update service to use new task definition
+          # Update service
           aws ecs update-service \
             --cluster growfat-flask-ecs \
             --service growfat-service \
             --task-definition growfat-task
+
+          echo "Deployment completed successfully!"
