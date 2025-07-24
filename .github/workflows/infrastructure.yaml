@@ -48,8 +48,9 @@ jobs:
             echo "ECR repository already exists: growfat-flask-private-repository"
           fi
 
-      - name: Handle Existing IAM Roles
+      - name: Handle Existing Resources
         run: |
+          # Import IAM roles
           if aws iam get-role --role-name growfat-ecs-xray-taskrole &> /dev/null; then
             echo "Importing existing task role..."
             terraform import aws_iam_role.ecs_task_role growfat-ecs-xray-taskrole || true
@@ -58,6 +59,18 @@ jobs:
           if aws iam get-role --role-name growfat-ecs-xray-taskexecutionrole &> /dev/null; then
             echo "Importing existing execution role..."
             terraform import aws_iam_role.ecs_execution_role growfat-ecs-xray-taskexecutionrole || true
+          fi
+          
+          # Import CloudWatch log group
+          if aws logs describe-log-groups --log-group-name-prefix "/ecs/growfat-task" --query 'logGroups[0].logGroupName' --output text | grep -q "/ecs/growfat-task"; then
+            echo "Importing existing log group..."
+            terraform import aws_cloudwatch_log_group.ecs_log_group "/ecs/growfat-task" || true
+          fi
+          
+          # Import ECS service
+          if aws ecs describe-services --cluster growfat-flask-ecs --services growfat-service --query 'services[0].serviceName' --output text | grep -q "growfat-service"; then
+            echo "Importing existing ECS service..."
+            terraform import aws_ecs_service.growfat_service growfat-flask-ecs/growfat-service || true
           fi
         working-directory: ./terraform
 
